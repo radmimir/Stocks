@@ -22,6 +22,8 @@ namespace ClientApplication
         private static float eta = 0.005F;
         private static ulong n = 0;
         private static int stockCost = 0;
+        private static int countSent = 0; // buffer number sent from server
+        private static int countReceived = 0; // buffer number received
 
 
 
@@ -59,7 +61,7 @@ namespace ClientApplication
             udpClient = new UdpClient();
             udpClient.ExclusiveAddressUse = false;
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            udpClient.ExclusiveAddressUse = false;
+            udpClient.Client.ReceiveBufferSize = 1024;
             // Bind, Join
             udpClient.Client.Bind(localEndPoint);
             udpClient.JoinMulticastGroup(multicastAddress, localAddress);
@@ -69,8 +71,8 @@ namespace ClientApplication
             udpClient.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 1);
             udpClient.Client.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoChecksum, true);
             //Configure multicast group
-            multicastOption = new MulticastOption(multicastAddress);
-            udpClient.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, multicastOption);
+            //multicastOption = new MulticastOption(multicastAddress,localAddress);
+            //udpClient.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, multicastOption);
         }
         static float calcAverage(float nextValue)
         {
@@ -88,9 +90,15 @@ namespace ClientApplication
         {
             while (true)
             {
-                IPEndPoint ipEndPoint = new IPEndPoint(IPAddress.Any, 0);
-                byte[] data = udpClient.Receive(ref ipEndPoint);
-                stockCost = BitConverter.ToInt32(data,0);
+                //IPEndPoint ipEndPoint = new IPEndPoint(IPAddress.Any, 0);
+                byte[] data = udpClient.Receive(ref remoteEndPoint);
+                int[] buf = new int[1];
+                Buffer.BlockCopy(data, 0, buf, 0, sizeof(int));
+                stockCost = buf[0];
+                Buffer.BlockCopy(data, 0, buf, 0, sizeof(int));
+                countSent = buf[0];
+                countReceived += 1;
+                Console.WriteLine("GET {0} {1} {2} {3}%", stockCost, countSent, countReceived, 100*(countReceived/countSent));
             }
         }
         static void Main(string[] args)

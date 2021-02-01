@@ -45,6 +45,7 @@ namespace ServerApplication
             socket.SetIPProtectionLevel(IPProtectionLevel.Restricted);
             socket.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoDelay, true);
             socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 1);
+            socket.SendBufferSize = 1024;
             socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, 0);
             socket.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoChecksum, true);
             //Configure multicast group
@@ -62,7 +63,7 @@ namespace ServerApplication
             ConfigureSocket();
             Console.WriteLine("Server succesfully started");
             Console.WriteLine("Press CTRL + C to exit ");
-            byte[] buffer = new byte[sizeof(int)+ sizeof(ulong)];
+            byte[] buffer = new byte[1024];
             byte[] stock, count_buf;
             int count = 0;
             while (true)
