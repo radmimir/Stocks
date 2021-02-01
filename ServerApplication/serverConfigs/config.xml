@@ -1,0 +1,11 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<configuration>
+  <randomSettings>
+    <minRange>105</minRange>
+    <maxRange>120</maxRange>
+  </randomSettings>
+  <multiCastSettings>
+    <serverAddress>224.2.2.4</serverAddress>
+    <port>8000</port>
+  </multiCastSettings>
+</configuration>

@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<configuration>
+  <latencySettings>
+    <latency>1000</latency>
+  </latencySettings>
+  <multiCastSettings>
+    <multicastAddress>224.2.2.4</multicastAddress>
+    <port>8000</port>
+  </multiCastSettings>
+</configuration>
