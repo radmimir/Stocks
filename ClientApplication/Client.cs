@@ -14,33 +14,31 @@ namespace ClientApplication
 {
     class Client
     {
-        private static float latency; // in ms
+        private static int latency; // in ms
 
         private static float average = 0.0F;
-        private static float dispersion = 0.0F;
+        private static float deviation = 0.0F;
         private static float mode = 0.0F;
         private static float median = 0.0F;
+        private static float eta = 0.0F;
         private static float M2 = 0.0F;
-        private static float eta = 0.005F;
-        private static ulong n = 0;
+        private static int n = 0;
         private static int stockCost = 0;
         private static int countSent = 0; // buffer number sent from server
         private static int countReceived = 0; // buffer number received
+        private static int packetLost = 0;
+        private static Object locker = new Object();
 
 
         
         private static UdpClient udpClient;
-        private static Socket socket;
         private static int port;
-        private static MulticastOption multicastOption;
 
         private static IPAddress serverAddress;
         private static IPAddress localAddress;
         private static IPEndPoint localEndPoint;
-        private static IPEndPoint remoteEndPoint;
-        private static IPEndPoint endPoint;
 
-        private static Dictionary<int, int> values;
+        private static Dictionary<int, int> values = new Dictionary<int, int>();
 
         private static string configUri = Directory.GetCurrentDirectory() + "./../../clientConfigs/config.xml";
 
@@ -51,7 +49,7 @@ namespace ClientApplication
             xmldoc.Load(configUri);
 
             XmlNode latencySettings = xmldoc.SelectSingleNode("configuration/latencySettings");
-            latency = Convert.ToSingle(latencySettings.SelectSingleNode("latency").InnerText);
+            latency = Convert.ToInt32(latencySettings.SelectSingleNode("latency").InnerText);
 
             XmlNode multiCastSettings = xmldoc.SelectSingleNode("configuration/multiCastSettings");
             serverAddress = IPAddress.Parse(multiCastSettings.SelectSingleNode("serverAddress").InnerText);
@@ -60,11 +58,10 @@ namespace ClientApplication
         }
         public static void ConfigureSocket()
         {
-            remoteEndPoint = new IPEndPoint(serverAddress, port);
             localEndPoint = new IPEndPoint(localAddress, port);
 
             // Create and configure UdpClient
-            
+
             udpClient = new UdpClient();
             udpClient.ExclusiveAddressUse = false;
             // Bind, Join
@@ -72,78 +69,91 @@ namespace ClientApplication
             udpClient.JoinMulticastGroup(serverAddress);
 
             //Configure socket
-            udpClient.Ttl = 1;
-            udpClient.Client.SetIPProtectionLevel(IPProtectionLevel.Restricted);
             udpClient.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 1);
             udpClient.Client.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoChecksum, true);
+            udpClient.Client.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoDelay, true);
             udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+            udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReceiveTimeout, 0);
             udpClient.Client.ReceiveBufferSize = 1024;
-            //udpClient.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, new MulticastOption(serverAddress));
-            /*
-            socket = new Socket(AddressFamily.InterNetwork,
-                                         SocketType.Dgram,
-                                         ProtocolType.Udp);
-            endPoint = new IPEndPoint(serverAddress, port);
-            //Configure socket
-            socket.SetIPProtectionLevel(IPProtectionLevel.Restricted);
-            socket.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoDelay, true);
-            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 2);
-            socket.ReceiveBufferSize = 1024;
-            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, 0);
-            socket.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoChecksum, true);
-            //Configure multicast group
-            multicastOption = new MulticastOption(serverAddress, localAddress);
-            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, multicastOption);*/
         }
         static float calcAverage(int nextValue)
         {
-            return average + (nextValue - average) / n;
+            return average + (nextValue - average) / Convert.ToSingle(n);
         }
         static float calcMedian(int nextValue)
         {
-            return median + eta * Math.Sign(nextValue - median);
+            int[] l = values.Keys.ToArray<int>();
+            if (l.Length % 2 == 1)
+                return l[l.Length / 2];
+            else
+                return 0.5f * (l[l.Length / 2 - 1] + l[l.Length / 2]);
         }
-        static float calcDispersion(int nextValue, float prevAverage) // WellFord's algorithm
+        static float calcDeviation(int nextValue, float prevAverage) // WellFord's algorithm
         {
             M2 += (nextValue - prevAverage) * (nextValue - average);
-            return M2 / n;
+            return M2 / Convert.ToSingle(n);
         }
-        static void calcStatistics(int nextValue)
+        static float calcMode(Dictionary<int,int> dictValues)
+        {
+            return dictValues.Aggregate((x, y) => x.Value > y.Value ? x : y).Key;
+        }
+        static void calcStatistics()
         {
             n += 1;
+            int nextValue = stockCost;
             float prevAverage = average;
             average = calcAverage(nextValue);
-            dispersion = calcDispersion(nextValue, prevAverage);
+            deviation = calcDeviation(nextValue, prevAverage);
             median = calcMedian(nextValue);
+            lock (locker)
+            {
+                if (values.Count > 0)
+                    mode = calcMode(values);
+            }
         }
         static void Receive()
         {
-            Console.WriteLine("Receiving started ");
             byte[] data = new byte[1024];
             while (true)
             {
-                //IPEndPoint ipEndPoint = new IPEndPoint(IPAddress.Any, 0);
-                data = udpClient.Receive(ref localEndPoint);//,0,data.Length,SocketFlags.Multicast);
+                data = udpClient.Receive(ref localEndPoint);
                 int[] buf = new int[1];
                 Buffer.BlockCopy(data, 0, buf, 0, sizeof(int));
                 stockCost = buf[0];
                 Buffer.BlockCopy(data, sizeof(int), buf, 0, sizeof(int));
                 countSent = buf[0];
                 countReceived += 1;
-                values[stockCost] += 1;
-                Console.WriteLine("GET {0} {1} {2} {3}%", stockCost, countSent, countReceived, 100*(countReceived/countSent));
+                lock (locker)
+                {
+                    if (values.ContainsKey(stockCost))
+                        values[stockCost] += 1;
+                    else
+                        values[stockCost] = 1;
+                }
+                packetLost = countSent - countReceived;
+                Thread calc = new Thread(calcStatistics);
+                calc.Start();
+                Thread.Sleep(latency);
+            }
+        }
+        static void Print()
+        {
+            while (true)
+            {
+                Console.ReadLine();
+                Console.Write("Mean: {0} Deviation: {1} Median: {2} Mode: {3} Packets lost: {4} ",
+                    average, deviation, median, mode, packetLost);
             }
         }
         static void Main(string[] args)
         {
             LoadConfiguration();
             ConfigureSocket();
-            Thread calculate = new Thread(Receive);
-            calculate.Start();
-            while (true)
-            {
-                calcStatistics(stockCost);
-            }
+            Thread receive = new Thread(Receive);
+            receive.Start();
+            Thread print = new Thread(Print);
+            print.Start();
+            Console.WriteLine("Client successfully started. Press Enter to print statistics ");
         }
     }
 }

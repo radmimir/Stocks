@@ -3,7 +3,7 @@ using System.Xml;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
-using System.Globalization;
+using System.Threading;
 
 namespace ServerApplication
 {
@@ -19,8 +19,6 @@ namespace ServerApplication
         private static IPAddress localAddress;
         private static IPEndPoint endPoint;
         private static int port;
-        private static Socket socket;
-        private static MulticastOption multicastOption;
 
         private static string configUri = Directory.GetCurrentDirectory() + "./../../serverConfigs/config.xml";
 
@@ -41,25 +39,9 @@ namespace ServerApplication
         }
         public static void ConfigureSocket()
         {
-            /*
-            socket = new Socket(AddressFamily.InterNetwork,
-                                     SocketType.Dgram,
-                                     ProtocolType.Udp);
-            endPoint = new IPEndPoint(serverAddress, port);
-            //Configure socket
-            socket.SetIPProtectionLevel(IPProtectionLevel.Restricted);
-            socket.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoDelay, true);
-            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 2);
-            socket.SendBufferSize = 1024;
-            socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, 0);
-            socket.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoChecksum, true);
-            //Configure multicast group
-            multicastOption = new MulticastOption(serverAddress, localAddress);
-            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, multicastOption);*/
             udpClient = new UdpClient();
             endPoint = new IPEndPoint(serverAddress, port);
             //Configure socket
-            udpClient.Ttl = 1;
             udpClient.Client.SetIPProtectionLevel(IPProtectionLevel.Restricted);
             udpClient.Client.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoDelay, true);
             udpClient.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 1);

@@ -1,7 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8" ?>
 <configuration>
   <latencySettings>
-    <latency>1000</latency>
+    <latency>0</latency>
   </latencySettings>
   <multiCastSettings>
     <serverAddress>224.2.2.4</serverAddress>
