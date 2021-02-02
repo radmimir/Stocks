@@ -4,7 +4,7 @@
     <latency>1000</latency>
   </latencySettings>
   <multiCastSettings>
-    <multicastAddress>224.2.2.4</multicastAddress>
+    <serverAddress>224.2.2.4</serverAddress>
     <port>8000</port>
   </multiCastSettings>
 </configuration>

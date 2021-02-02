@@ -3,6 +3,7 @@ using System.Xml;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Globalization;
 
 namespace ServerApplication
 {
@@ -13,7 +14,9 @@ namespace ServerApplication
         private static int maxRange;
         private static Random random = new Random();
 
+        private static UdpClient udpClient;
         private static IPAddress serverAddress;
+        private static IPAddress localAddress;
         private static IPEndPoint endPoint;
         private static int port;
         private static Socket socket;
@@ -34,9 +37,11 @@ namespace ServerApplication
             XmlNode multiCastSettings = xmldoc.SelectSingleNode("configuration/multiCastSettings");
             serverAddress = IPAddress.Parse(multiCastSettings.SelectSingleNode("serverAddress").InnerText);
             port = Convert.ToInt32(multiCastSettings.SelectSingleNode("port").InnerText);
+            localAddress = IPAddress.Any;
         }
         public static void ConfigureSocket()
         {
+            /*
             socket = new Socket(AddressFamily.InterNetwork,
                                      SocketType.Dgram,
                                      ProtocolType.Udp);
@@ -44,13 +49,24 @@ namespace ServerApplication
             //Configure socket
             socket.SetIPProtectionLevel(IPProtectionLevel.Restricted);
             socket.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoDelay, true);
-            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 1);
+            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 2);
             socket.SendBufferSize = 1024;
             socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, 0);
             socket.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoChecksum, true);
             //Configure multicast group
-            multicastOption = new MulticastOption(serverAddress);
-            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, multicastOption);
+            multicastOption = new MulticastOption(serverAddress, localAddress);
+            socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.AddMembership, multicastOption);*/
+            udpClient = new UdpClient();
+            endPoint = new IPEndPoint(serverAddress, port);
+            //Configure socket
+            udpClient.Ttl = 1;
+            udpClient.Client.SetIPProtectionLevel(IPProtectionLevel.Restricted);
+            udpClient.Client.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoDelay, true);
+            udpClient.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 1);
+            udpClient.Client.SendBufferSize = 1024;
+            udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.SendTimeout, 0);
+            udpClient.Client.SetSocketOption(SocketOptionLevel.Udp, SocketOptionName.NoChecksum, true);
+            udpClient.JoinMulticastGroup(serverAddress,localAddress);
         }
         static int GetStockCost()
         {
@@ -74,7 +90,7 @@ namespace ServerApplication
                 count_buf = BitConverter.GetBytes(count);
                 Buffer.BlockCopy(stock, 0, buffer, 0, sizeof(int));
                 Buffer.BlockCopy(count_buf, 0, buffer, sizeof(int), sizeof(int));
-                socket.SendTo(buffer,SocketFlags.None,endPoint);
+                udpClient.Send(buffer, buffer.Length, endPoint);
             }
         }
     }
